@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="860" height="260" viewBox="0 0 860 260" role="img" aria-labelledby="title desc">
+  <title id="title">Framewire terminal example</title><desc id="desc">Doctor checks a camera, run starts, then a target is acquired and moved.</desc>
+  <rect width="860" height="260" rx="16" fill="#101C29"/>
+  <rect width="860" height="38" rx="16" fill="#1A2D3A"/>
+  <rect y="27" width="860" height="12" fill="#1A2D3A"/>
+  <circle cx="23" cy="19" r="5" fill="#E98F88"/><circle cx="41" cy="19" r="5" fill="#EAC57A"/><circle cx="59" cy="19" r="5" fill="#82CBA8"/>
+  <text x="430" y="24" text-anchor="middle" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="12" fill="#93ADB8">framewire — terminal</text>
+  <g font-family="Cascadia Code, Consolas, monospace" font-size="14">
+    <text x="23" y="69" fill="#7EDDC9">❯</text><text x="47" y="69" fill="#E8F1EF">framewire doctor</text>
+    <text x="47" y="94" fill="#A6BCC3">camera ready</text><text x="195" y="94" fill="#7EDDC9">True</text><text x="263" y="94" fill="#A6BCC3">source</text><text x="330" y="94" fill="#D5E5E5">camera:0</text>
+    <text x="23" y="129" fill="#7EDDC9">❯</text><text x="47" y="129" fill="#E8F1EF">framewire run --servo-pin 18</text>
+    <text x="47" y="154" fill="#93ADB8">framewire</text><text x="150" y="154" fill="#D6E8E7">Connected to camera:0</text>
+    <text x="47" y="186" fill="#68C8D8">source.connected</text><text x="256" y="186" fill="#738F9C">sequence 1</text>
+    <text x="47" y="211" fill="#78DEBB">target.acquired</text><text x="256" y="211" fill="#C9DADB">x 0.63  y 0.48</text>
+    <text x="47" y="236" fill="#78DEBB">target.moved</text><text x="256" y="236" fill="#C9DADB">x 0.67  y 0.48</text>
+  </g>
+</svg>

@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "framewire"
+version = "0.1.0"
+description = "Camera in. Control events out. A resilient, headless bridge for small physical projects."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+authors = [{name = "Angus Uelsmann"}]
+keywords = ["camera", "raspberry-pi", "gpio", "servo", "rtsp", "automation"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Topic :: Multimedia :: Video :: Capture",
+  "Topic :: System :: Hardware",
+]
+dependencies = ["opencv-python-headless>=4.8,<5", "rich>=13.7,<15"]
+
+[project.optional-dependencies]
+pi = ["gpiozero>=2.0,<3"]
+dev = ["pytest>=8,<10", "ruff>=0.8,<1"]
+
+[project.scripts]
+framewire = "framewire.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+# Hardware and network boundaries intentionally catch provider-specific failures.
+ignore = ["BLE001"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

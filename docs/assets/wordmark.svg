@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="176" viewBox="0 0 760 176" role="img" aria-labelledby="title desc">
+  <title id="title">Framewire</title><desc id="desc">Camera in. Control events out.</desc>
+  <defs>
+    <linearGradient id="bg" x2="1" y2="1"><stop stop-color="#101D2C"/><stop offset="1" stop-color="#172D38"/></linearGradient>
+    <linearGradient id="accent" x2="1" y2="1"><stop stop-color="#67E8D1"/><stop offset="1" stop-color="#A6D7FF"/></linearGradient>
+    <pattern id="grid" width="28" height="28" patternUnits="userSpaceOnUse"><path d="M28 0H0V28" fill="none" stroke="#607A89" stroke-opacity=".1"/></pattern>
+  </defs>
+  <rect width="760" height="176" rx="22" fill="url(#bg)"/>
+  <rect width="760" height="176" rx="22" fill="url(#grid)"/>
+  <g transform="translate(44 43)" fill="none" stroke="url(#accent)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M18 16H8v22M72 16h10v22M8 65v22h10M82 65v22H72"/>
+    <circle cx="45" cy="51" r="22"/><circle cx="45" cy="51" r="7" fill="#67E8D1" stroke="none"/>
+    <path d="M87 51h33m-8-8 8 8-8 8"/>
+  </g>
+  <text x="190" y="88" fill="#F1F8F7" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="54" font-weight="750" letter-spacing="-2">framewire</text>
+  <text x="193" y="120" fill="#A8C1C8" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="16" letter-spacing="2.4">CAMERA IN  /  CONTROL EVENTS OUT</text>
+  <rect x="688" y="31" width="45" height="24" rx="12" fill="#203E47" stroke="#4C817F"/>
+  <text x="710" y="48" text-anchor="middle" fill="#8EECDA" font-family="monospace" font-size="11">0.1</text>
+</svg>
