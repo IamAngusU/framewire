@@ -60,8 +60,7 @@ class OpenCVSource:
     def open(cls, value: int | str) -> OpenCVSource:
         label = f"camera:{value}" if isinstance(value, int) else safe_label(value)
         if isinstance(value, int):
-            backend = cv2.CAP_DSHOW if sys.platform == "win32" else cv2.CAP_ANY
-            cap = cv2.VideoCapture(value, backend)
+            cap = cv2.VideoCapture(value, cv2.CAP_ANY)
         else:
             params = [cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 5000, cv2.CAP_PROP_READ_TIMEOUT_MSEC, 5000]
             cap = cv2.VideoCapture(value, cv2.CAP_FFMPEG, params)
