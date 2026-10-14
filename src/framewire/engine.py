@@ -7,6 +7,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass
 
+from .adapters import AdapterManager
 from .model import Target
 from .outputs import ControlHub, EventBus
 from .sources import FrameSource, safe_error, safe_label
@@ -82,6 +83,7 @@ def run(
     *,
     source_factory: Callable[[], FrameSource],
     tracker_factory: Callable[[str], object] = make_tracker,
+    adapters: AdapterManager | None = None,
     stop: threading.Event | None = None,
     status: Callable[[str], None] | None = None,
 ) -> None:
@@ -92,6 +94,8 @@ def run(
     retry = 1.0
     state: TargetState | None = None
     try:
+        if adapters is not None:
+            adapters.start()
         while not stop.is_set():
             source: FrameSource | None = None
             state = TargetState(lost_after=options.lost_after)
@@ -107,6 +111,8 @@ def run(
                     started = time.monotonic()
                     detected = tracker.detect(frame)
                     kind, target = state.step(detected, started)
+                    if adapters is not None:
+                        adapters.on_frame(frame, started)
                     if kind:
                         bus.emit(kind, source_label, target)
                     if target is not None:
@@ -150,4 +156,6 @@ def run(
                     pass
         finally:
             control.close()
+            if adapters is not None:
+                adapters.close()
             bus.close()

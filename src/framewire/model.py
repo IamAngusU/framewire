@@ -27,6 +27,7 @@ class Event:
     source: str
     target: Target | None = None
     detail: str | None = None
+    data: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         result: dict[str, Any] = {
@@ -40,4 +41,6 @@ class Event:
             result["target"] = self.target.to_dict()
         if self.detail:
             result["detail"] = self.detail
+        if self.data is not None:
+            result["data"] = self.data
         return result

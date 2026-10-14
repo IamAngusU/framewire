@@ -1,0 +1,1 @@
+"""Copyable example adapters."""

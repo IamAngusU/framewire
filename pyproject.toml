@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "framewire"
-version = "0.1.0"
+version = "0.2.0"
 description = "Camera in. Control events out. A resilient, headless bridge for small physical projects."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -19,10 +19,18 @@ classifiers = [
   "Topic :: Multimedia :: Video :: Capture",
   "Topic :: System :: Hardware",
 ]
-dependencies = ["opencv-python-headless>=4.8,<5", "rich>=13.7,<15"]
+dependencies = [
+  "opencv-python-headless>=4.8,<6",
+  "rich>=13.7,<15",
+  "tomli>=2.0; python_version < '3.11'",
+]
 
 [project.optional-dependencies]
 pi = ["gpiozero>=2.0,<3"]
+hands = ["mediapipe>=1.0,<2"]
+lips = ["mediapipe>=1.0,<2"]
+voice = ["faster-whisper>=1.2,<2", "sounddevice>=0.5,<1"]
+perception = ["mediapipe>=1.0,<2", "faster-whisper>=1.2,<2", "sounddevice>=0.5,<1"]
 dev = ["pytest>=8,<10", "ruff>=0.8,<1"]
 
 [project.scripts]
@@ -30,6 +38,9 @@ framewire = "framewire.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+"framewire.examples.adapters" = ["*.toml"]
 
 [tool.ruff]
 line-length = 100

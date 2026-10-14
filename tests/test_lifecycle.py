@@ -6,6 +6,7 @@ from framewire.engine import RunOptions, TargetState, run
 from framewire.model import Target
 from framewire.outputs import ControlHub, EventBus
 from framewire.sources import CameraError, safe_error, safe_label
+from framewire.tracking import make_tracker
 
 
 def point(x):
@@ -159,3 +160,35 @@ def test_broken_output_pipe_still_releases_active_gpio():
     )
     assert not gpio.active
     assert gpio.closed
+
+
+def test_adapter_only_mode_skips_builtin_tracking_and_receives_frames():
+    class Adapter:
+        frames = 0
+        closed = False
+
+        def start(self):
+            pass
+
+        def on_frame(self, frame, now):
+            self.frames += 1
+
+        def close(self):
+            self.closed = True
+
+    adapter = Adapter()
+    source = FakeSource(2)
+    output = io.StringIO()
+    bus = EventBus(stream=output)
+    run(
+        RunOptions(track="none", fps=60, max_frames=2),
+        bus,
+        ControlHub(),
+        source_factory=lambda: source,
+        adapters=adapter,
+        stop=FakeStop(),
+    )
+    assert make_tracker("none").detect(None) is None
+    assert adapter.frames == 2 and adapter.closed
+    assert source.closed
+    assert '"type":"target.' not in output.getvalue()

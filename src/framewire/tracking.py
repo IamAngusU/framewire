@@ -65,5 +65,16 @@ class MotionTracker:
         )
 
 
+class NoTracker:
+    def detect(self, frame) -> None:
+        return None
+
+
 def make_tracker(kind: str):
-    return FaceTracker() if kind == "face" else MotionTracker()
+    if kind == "face":
+        return FaceTracker()
+    if kind == "motion":
+        return MotionTracker()
+    if kind == "none":
+        return NoTracker()
+    raise ValueError(f"unknown tracker: {kind}")

@@ -27,6 +27,8 @@ class EventBus:
         self.token = token
         self.warn = warn or (lambda message: None)
         self.sequence = 0
+        self._lock = threading.RLock()
+        self.listeners: list[Callable[[dict], None]] = []
         self.pending: queue.Queue[dict | None] = queue.Queue(maxsize=64)
         self.worker: threading.Thread | None = None
         self._queue_warned = False
@@ -37,30 +39,41 @@ class EventBus:
             self.worker.start()
 
     def emit(
-        self, kind: str, source: str, target: Target | None = None, detail: str | None = None
+        self,
+        kind: str,
+        source: str,
+        target: Target | None = None,
+        detail: str | None = None,
+        data: dict | None = None,
     ) -> Event:
-        self.sequence += 1
-        event = Event(self.sequence, kind, source, target, detail)
-        payload = event.to_dict()
-        self.stream.write(json.dumps(payload, separators=(",", ":")) + "\n")
-        self.stream.flush()
-        if self.webhook:
-            try:
-                self.pending.put_nowait(payload)
-                self._queue_warned = False
-            except queue.Full:
-                if kind != "target.moved":
-                    try:
-                        self.pending.get_nowait()
-                        self.pending.put_nowait(payload)
-                    except queue.Empty:
-                        pass
-                if not self._queue_warned:
-                    self.warn(
-                        "Webhook is falling behind; some events were dropped (stdout remains complete)."
-                    )
-                    self._queue_warned = True
+        with self._lock:
+            self.sequence += 1
+            event = Event(self.sequence, kind, source, target, detail, data)
+            payload = event.to_dict()
+            self.stream.write(json.dumps(payload, separators=(",", ":")) + "\n")
+            self.stream.flush()
+            if self.webhook:
+                try:
+                    self.pending.put_nowait(payload)
+                    self._queue_warned = False
+                except queue.Full:
+                    if kind != "target.moved":
+                        try:
+                            self.pending.get_nowait()
+                            self.pending.put_nowait(payload)
+                        except queue.Empty:
+                            pass
+                    if not self._queue_warned:
+                        self.warn(
+                            "Webhook is falling behind; some events were dropped (stdout remains complete)."
+                        )
+                        self._queue_warned = True
+            for listener in tuple(self.listeners):
+                listener(payload)
         return event
+
+    def subscribe(self, listener: Callable[[dict], None]) -> None:
+        self.listeners.append(listener)
 
     def _send_loop(self) -> None:
         assert self.webhook is not None
@@ -68,7 +81,7 @@ class EventBus:
             payload = self.pending.get()
             if payload is None:
                 return
-            headers = {"Content-Type": "application/json", "User-Agent": "framewire/0.1"}
+            headers = {"Content-Type": "application/json", "User-Agent": "framewire/0.2"}
             if self.token:
                 headers["Authorization"] = f"Bearer {self.token}"
             request = Request(

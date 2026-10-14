@@ -9,6 +9,6 @@ ruff check src tests examples
 ruff format --check src tests examples
 ```
 
-For camera adapters, include a test that simulates a failed read and a reconnect. For GPIO changes, verify inactive startup, release on target loss and source failure, and cleanup on shutdown. CI has no physical camera or Pi; mention the hardware you tested in a pull request.
+For camera adapters, include a test that simulates a failed read and a reconnect. For GPIO changes, verify inactive startup, release on target loss and source failure, and cleanup on shutdown. For user adapters, keep imports optional, verify failure isolation, and send JSON-safe signals through `context.emit`. CI has no physical camera, microphone or Pi; mention the hardware you tested in a pull request.
 
 Please open an issue describing the camera type, OS, Python/OpenCV versions and `framewire doctor --json` output for reproducible bugs. Remove private URLs and credentials before posting diagnostics.

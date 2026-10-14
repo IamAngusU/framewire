@@ -16,9 +16,28 @@ from rich.panel import Panel
 from rich.table import Table
 
 from . import __version__
+from .adapters import (
+    EXAMPLES,
+    AdapterManager,
+    adapter_dir,
+    create_adapter,
+    install_example,
+    list_installed,
+    remove_adapter,
+    set_enabled,
+)
 from .engine import RunOptions, run
+from .gestures_cli import record as record_gesture
+from .gestures_cli import remove as remove_gesture_label
+from .gestures_cli import sample_path as gesture_sample_path
+from .handmatch import load_samples as load_gesture_samples
+from .lipmatch import load_samples
+from .lips_cli import record as record_lips
+from .lips_cli import remove as remove_lip_label
+from .lips_cli import sample_path
 from .model import Target
 from .outputs import ControlHub, EventBus
+from .phrases import add_phrase, load_preferences, remove_phrase, set_language
 from .sources import open_source, safe_error, safe_label
 from .tracking import make_tracker
 
@@ -54,7 +73,7 @@ def parser() -> argparse.ArgumentParser:
     live.add_argument(
         "--snapshot", action="store_true", help="Treat HTTP URL as a repeated JPEG/PNG snapshot"
     )
-    live.add_argument("--track", choices=("face", "motion"), default="face")
+    live.add_argument("--track", choices=("face", "motion", "none"), default="face")
     live.add_argument(
         "--fps", type=positive_float, default=12, help="Maximum sampling rate (default: 12)"
     )
@@ -79,6 +98,13 @@ def parser() -> argparse.ArgumentParser:
         help="Read webhook bearer token from this environment variable",
     )
     live.add_argument("--dry-run", action="store_true", help="Emit events without driving pins")
+    live.add_argument("--no-adapters", action="store_true", help="Ignore installed adapters")
+    live.add_argument(
+        "--adapter",
+        action="append",
+        metavar="NAME",
+        help="Run only this installed adapter (repeatable)",
+    )
     live.add_argument("--max-frames", type=int, metavar="N", help="Stop after N received frames")
 
     check = commands.add_parser("doctor", help="Check dependencies and read one frame")
@@ -88,6 +114,47 @@ def parser() -> argparse.ArgumentParser:
 
     demo = commands.add_parser("demo", help="See the event stream without a camera or GPIO")
     demo.add_argument("--seconds", type=positive_float, default=3)
+
+    adapters = commands.add_parser("adapters", help="Install and manage local adapters")
+    adapter_actions = adapters.add_subparsers(dest="adapter_action", required=True)
+    for action in ("path", "list"):
+        adapter_actions.add_parser(action)
+    for action in ("add", "new", "enable", "disable", "remove"):
+        command = adapter_actions.add_parser(action)
+        command.add_argument("name")
+
+    lips = commands.add_parser("lips", help="Train short visual commands from your own examples")
+    lip_actions = lips.add_subparsers(dest="lip_action", required=True)
+    lip_record = lip_actions.add_parser("record")
+    lip_record.add_argument("label", help="Command label, for example lamp.on")
+    lip_record.add_argument("--source", default="auto")
+    lip_record.add_argument("--seconds", type=float, default=2.0)
+    lip_record.add_argument("--repeats", type=int, default=3)
+    lip_actions.add_parser("list")
+    lip_remove = lip_actions.add_parser("remove")
+    lip_remove.add_argument("label")
+
+    gestures = commands.add_parser("gestures", help="Teach and manage static hand signs")
+    gesture_actions = gestures.add_subparsers(dest="gesture_action", required=True)
+    gesture_record = gesture_actions.add_parser("record")
+    gesture_record.add_argument("label", help="Your sign name, for example lamp.on")
+    gesture_record.add_argument("--source", default="auto")
+    gesture_record.add_argument("--seconds", type=float, default=2.0)
+    gesture_record.add_argument("--repeats", type=int, default=3)
+    gesture_actions.add_parser("list")
+    gesture_remove = gesture_actions.add_parser("remove")
+    gesture_remove.add_argument("label")
+
+    phrases = commands.add_parser("phrases", help="Manage spoken commands and language")
+    phrase_actions = phrases.add_subparsers(dest="phrase_action", required=True)
+    phrase_add = phrase_actions.add_parser("add")
+    phrase_add.add_argument("phrase")
+    phrase_add.add_argument("action")
+    phrase_actions.add_parser("list")
+    phrase_remove = phrase_actions.add_parser("remove")
+    phrase_remove.add_argument("phrase")
+    phrase_language = phrase_actions.add_parser("language")
+    phrase_language.add_argument("code", help="auto or a language code such as de")
     return top
 
 
@@ -101,6 +168,10 @@ def overview(top: argparse.ArgumentParser) -> None:
     table.add_row("[bold]framewire doctor[/]", "Find a camera and check the local setup")
     table.add_row("[bold]framewire run[/]", "Follow a face; JSON events on stdout")
     table.add_row("[bold]framewire demo[/]", "Try the event stream without hardware")
+    table.add_row("[bold]framewire adapters[/]", "Add hands, voice, lip or action adapters")
+    table.add_row("[bold]framewire gestures[/]", "Record your own hand signs")
+    table.add_row("[bold]framewire phrases[/]", "Map spoken phrases and set a language")
+    table.add_row("[bold]framewire lips[/]", "Record short visual commands")
     console.print(table)
     console.print("[dim]Add --help to any command for all options.[/]")
 
@@ -111,6 +182,10 @@ def doctor(args: argparse.Namespace) -> int:
         "opencv": cv2.__version__,
         "gpiozero_installed": find_spec("gpiozero") is not None,
         "picamera2_installed": find_spec("picamera2") is not None,
+        "mediapipe_installed": find_spec("mediapipe") is not None,
+        "voice_installed": find_spec("faster_whisper") is not None
+        and find_spec("sounddevice") is not None,
+        "adapters": [name for name, enabled in list_installed() if enabled],
         "source": safe_label(args.source),
         "camera_ready": False,
     }
@@ -179,6 +254,11 @@ def live(args: argparse.Namespace, top: argparse.ArgumentParser) -> int:
         top.error("--max-frames must be positive")
     if args.webhook and not args.webhook.startswith(("http://", "https://")):
         top.error("--webhook requires an HTTP(S) URL")
+    if args.no_adapters and args.adapter:
+        top.error("--no-adapters and --adapter cannot be combined")
+    installed = {name for name, enabled in list_installed() if enabled}
+    if args.adapter and not set(args.adapter).issubset(installed):
+        top.error("requested adapter is not installed and enabled; use 'framewire adapters list'")
     token = None
     if args.webhook_token_env:
         token = os.environ.get(args.webhook_token_env)
@@ -204,6 +284,11 @@ def live(args: argparse.Namespace, top: argparse.ArgumentParser) -> int:
         console.print(f"[red]Output setup failed:[/] {exc}")
         return 2
     bus = EventBus(webhook=args.webhook, token=token, warn=status)
+    adapters = (
+        None
+        if args.no_adapters
+        else AdapterManager(bus, selected=set(args.adapter) if args.adapter else None, warn=status)
+    )
     stop = threading.Event()
     previous = signal.getsignal(signal.SIGTERM)
     signal.signal(signal.SIGTERM, lambda *_: stop.set())
@@ -221,11 +306,149 @@ def live(args: argparse.Namespace, top: argparse.ArgumentParser) -> int:
             bus,
             control,
             source_factory=lambda: open_source(args.source, snapshot=args.snapshot),
+            adapters=adapters,
             stop=stop,
             status=status,
         )
     finally:
         signal.signal(signal.SIGTERM, previous)
+    return 0
+
+
+def adapter_command(args: argparse.Namespace) -> int:
+    action = args.adapter_action
+    if action == "path":
+        print(adapter_dir())
+        return 0
+    if action == "list":
+        console.print(f"[dim]Adapter folder:[/] {adapter_dir()}")
+        table = Table(title="Framewire adapters")
+        table.add_column("Name")
+        table.add_column("State")
+        for name, enabled in list_installed():
+            table.add_row(name, "enabled" if enabled else "disabled")
+        console.print(table)
+        console.print(f"[dim]Copyable examples: {', '.join(EXAMPLES)}[/]")
+        return 0
+    try:
+        if action == "add":
+            path = install_example(args.name)
+            console.print(f"[green]Installed[/] {path}")
+            if args.name in {"hands", "lips", "voice"}:
+                packages = (
+                    "mediapipe" if args.name in {"hands", "lips"} else "faster-whisper sounddevice"
+                )
+                console.print(
+                    f"Install optional recognition support: [bold]python -m pip install {packages}[/]"
+                )
+        elif action == "new":
+            console.print(f"[green]Created[/] {create_adapter(args.name)}")
+        elif action == "enable":
+            console.print(f"[green]Enabled[/] {set_enabled(args.name, True)}")
+        elif action == "disable":
+            console.print(f"[yellow]Disabled[/] {set_enabled(args.name, False)}")
+        elif action == "remove":
+            remove_adapter(args.name)
+            console.print(f"Removed {args.name} code and config; recorded data was kept.")
+    except (ValueError, FileExistsError, FileNotFoundError) as exc:
+        console.print(f"[red]{exc}[/]")
+        return 2
+    return 0
+
+
+def lips_command(args: argparse.Namespace) -> int:
+    if args.lip_action == "list":
+        samples = load_samples(sample_path())
+        table = Table(title="Visual commands")
+        table.add_column("Label")
+        table.add_column("Samples", justify="right")
+        for label, examples in sorted(samples.items()):
+            table.add_row(label, str(len(examples)))
+        console.print(table)
+        return 0
+    if args.lip_action == "remove":
+        if not remove_lip_label(args.label):
+            console.print(f"[red]No samples for {args.label}[/]")
+            return 2
+        console.print(f"Removed visual command {args.label}")
+        return 0
+    try:
+        count = record_lips(
+            args.label,
+            source_spec=args.source,
+            seconds=args.seconds,
+            repeats=args.repeats,
+            status=lambda message: console.print(message),
+        )
+    except (Exception, KeyboardInterrupt) as exc:
+        console.print(f"[red]Recording stopped:[/] {type(exc).__name__}: {exc}")
+        return 2
+    console.print(
+        f"[green]Recorded[/] {args.label} ({count} total samples). "
+        "Install/enable the lips adapter to recognize it during run."
+    )
+    return 0
+
+
+def gestures_command(args: argparse.Namespace) -> int:
+    if args.gesture_action == "list":
+        samples = load_gesture_samples(gesture_sample_path())
+        table = Table(title="Personal hand signs")
+        table.add_column("Label")
+        table.add_column("Samples", justify="right")
+        for label, examples in sorted(samples.items()):
+            table.add_row(label, str(len(examples)))
+        console.print(table)
+        return 0
+    if args.gesture_action == "remove":
+        if not remove_gesture_label(args.label):
+            console.print(f"[red]No samples for {args.label}[/]")
+            return 2
+        console.print(f"Removed hand sign {args.label}")
+        return 0
+    try:
+        count = record_gesture(
+            args.label,
+            source_spec=args.source,
+            seconds=args.seconds,
+            repeats=args.repeats,
+            status=lambda message: console.print(message),
+        )
+    except (Exception, KeyboardInterrupt) as exc:
+        console.print(f"[red]Recording stopped:[/] {type(exc).__name__}: {exc}")
+        return 2
+    console.print(
+        f"[green]Recorded[/] {args.label} ({count} total samples). "
+        "Install/enable the hands adapter to recognize it during run."
+    )
+    return 0
+
+
+def phrases_command(args: argparse.Namespace) -> int:
+    try:
+        if args.phrase_action == "add":
+            add_phrase(args.phrase, args.action)
+            console.print(f"[green]Mapped[/] {args.phrase} → {args.action}")
+        elif args.phrase_action == "remove":
+            if not remove_phrase(args.phrase):
+                console.print(f"[red]No mapping for {args.phrase}[/]")
+                return 2
+            console.print(f"Removed phrase {args.phrase}")
+        elif args.phrase_action == "language":
+            set_language(args.code)
+            console.print(f"[green]Language[/] {args.code}")
+        else:
+            preferences = load_preferences()
+            console.print(f"[dim]Language:[/] {preferences['language'] or 'voice.toml / auto'}")
+            table = Table(title="Spoken phrases")
+            table.add_column("Phrase")
+            table.add_column("Action")
+            for phrase, action in sorted(preferences["commands"].items()):
+                table.add_row(phrase, action)
+            console.print(table)
+    except (ValueError, OSError) as exc:
+        console.print(f"[red]{exc}[/]")
+        return 2
     return 0
 
 
@@ -241,4 +464,12 @@ def main(argv: list[str] | None = None) -> int:
         return demo(args)
     if args.command == "run":
         return live(args, top)
+    if args.command == "adapters":
+        return adapter_command(args)
+    if args.command == "lips":
+        return lips_command(args)
+    if args.command == "gestures":
+        return gestures_command(args)
+    if args.command == "phrases":
+        return phrases_command(args)
     return 2

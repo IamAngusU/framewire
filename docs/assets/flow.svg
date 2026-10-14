@@ -6,17 +6,17 @@
   <g font-family="Inter, Segoe UI, Arial, sans-serif">
     <rect x="36" y="79" width="191" height="187" rx="15" fill="#FFF" stroke="#C7D9D5"/>
     <text x="55" y="113" font-size="17" font-weight="700" fill="#173843">Input</text>
-    <text x="55" y="148" font-size="14" fill="#47666B">USB / laptop camera</text>
+    <text x="55" y="148" font-size="14" fill="#47666B">camera / microphone</text>
     <text x="55" y="177" font-size="14" fill="#47666B">Pi camera</text>
     <text x="55" y="206" font-size="14" fill="#47666B">RTSP / HTTP video</text>
     <text x="55" y="235" font-size="14" fill="#47666B">HTTP snapshot</text>
     <path d="M228 173H282" stroke="#6D9999" stroke-width="2" marker-end="url(#arrow)"/>
     <rect x="293" y="79" width="231" height="187" rx="15" fill="#132C36"/>
     <text x="312" y="113" font-size="17" font-weight="700" fill="#ECFBF7">Framewire</text>
-    <text x="312" y="148" font-size="14" fill="#B5D4D0">face or motion target</text>
-    <text x="312" y="177" font-size="14" fill="#B5D4D0">smoothing + lifecycle</text>
+    <text x="312" y="148" font-size="14" fill="#B5D4D0">face / hand / lip adapters</text>
+    <text x="312" y="177" font-size="14" fill="#B5D4D0">speech + custom commands</text>
     <text x="312" y="206" font-size="14" fill="#B5D4D0">reconnect + safe release</text>
-    <text x="312" y="238" font-size="12" fill="#70DBCB">NO FRAMES LEAVE THE PIPELINE</text>
+    <text x="312" y="238" font-size="12" fill="#70DBCB">NO RAW MEDIA IN EVENTS</text>
     <path d="M525 173H580" stroke="#6D9999" stroke-width="2" marker-end="url(#arrow)"/>
     <rect x="592" y="79" width="231" height="187" rx="15" fill="#FFF" stroke="#C7D9D5"/>
     <text x="611" y="113" font-size="17" font-weight="700" fill="#173843">Output</text>
@@ -25,5 +25,5 @@
     <text x="611" y="206" font-size="14" fill="#47666B">GPIO trigger</text>
     <text x="611" y="235" font-size="14" fill="#47666B">pan servo</text>
   </g>
-  <text x="36" y="299" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="12" fill="#59777A">Video remains local to Framewire. Only coordinates and state go to configured outputs.</text>
+  <text x="36" y="299" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="12" fill="#59777A">Raw media remains local. Coordinates, recognized text and state go to configured outputs.</text>
 </svg>

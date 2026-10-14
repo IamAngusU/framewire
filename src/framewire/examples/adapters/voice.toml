@@ -1,0 +1,13 @@
+# Model is downloaded on first use; tiny is the smallest multilingual option.
+model = "tiny"
+# Use a two-letter language code (de, en, es, ...) for short commands, or auto.
+language = "auto"
+min_rms = 0.018
+
+[commands]
+"lamp on" = "lamp.on"
+"lamp off" = "lamp.off"
+"licht an" = "lamp.on"
+"licht aus" = "lamp.off"
+"enciende la luz" = "lamp.on"
+"apaga la luz" = "lamp.off"

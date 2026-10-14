@@ -1,0 +1,33 @@
+# Change or extend these rules. `action.triggered` is delivered to stdout/webhook.
+[[rules]]
+signal = "hand.gesture"
+value = "Thumb_Up"
+phase = "start"
+action = "lamp.on"
+
+[[rules]]
+signal = "hand.gesture"
+value = "Closed_Fist"
+phase = "start"
+action = "lamp.off"
+
+[[rules]]
+signal = "hand.gesture"
+value = "lamp.on" # a personal sign recorded with `framewire gestures record lamp.on`
+phase = "start"
+action = "lamp.on"
+
+[[rules]]
+signal = "speech.command"
+value = "lamp.on"
+action = "lamp.on"
+
+[[rules]]
+signal = "speech.command"
+value = "lamp.off"
+action = "lamp.off"
+
+[[rules]]
+signal = "lip.command"
+value = "lamp.on"
+action = "lamp.on"

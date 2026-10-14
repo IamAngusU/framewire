@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import multiprocessing as mp
 import sys
 from dataclasses import dataclass
 from typing import Protocol
@@ -79,6 +80,96 @@ class OpenCVSource:
         self.capture.release()
 
 
+def _capture_worker(connection, value: int | str) -> None:
+    source = None
+    try:
+        source = PiCameraSource() if value == "picamera" else OpenCVSource.open(value)
+        connection.send(("ready", None))
+        while True:
+            command = connection.recv()
+            if command == "close":
+                break
+            if command != "read":
+                raise ValueError("unknown capture command")
+            connection.send(("frame", source.read()))
+    except EOFError:
+        pass
+    except Exception as exc:
+        try:
+            detail = str(exc) if isinstance(exc, CameraError) else ""
+            connection.send(("error", (type(exc).__name__, detail)))
+        except (BrokenPipeError, EOFError, OSError):
+            pass
+    finally:
+        if source is not None:
+            try:
+                source.close()
+            except Exception as exc:
+                print(f"framewire capture cleanup: {type(exc).__name__}", file=sys.stderr)
+        connection.close()
+
+
+class IsolatedSource:
+    """Keep a stuck native camera driver outside the CLI process."""
+
+    def __init__(self, value: int | str) -> None:
+        self.label = f"camera:{value}" if isinstance(value, int) else safe_label(value)
+        self.closed = False
+        context = mp.get_context("spawn")
+        self.connection, child = context.Pipe()
+        self.process = context.Process(target=_capture_worker, args=(child, value), daemon=True)
+        try:
+            self.process.start()
+            child.close()
+            self._expect("ready", timeout=8)
+        except Exception:
+            self.close()
+            raise
+
+    def _expect(self, expected: str, *, timeout: float):
+        if not self.connection.poll(timeout):
+            raise CameraError(f"Timed out waiting for {self.label}")
+        try:
+            kind, value = self.connection.recv()
+        except (EOFError, OSError) as exc:
+            raise CameraError(f"Capture process exited for {self.label}") from exc
+        if kind == "error":
+            name, detail = value
+            raise CameraError(detail if name == "CameraError" else f"{name} for {self.label}")
+        if kind != expected:
+            raise CameraError(f"Unexpected capture response from {self.label}")
+        return value
+
+    def read(self):
+        if self.closed:
+            raise CameraError(f"Capture closed for {self.label}")
+        try:
+            self.connection.send("read")
+            return self._expect("frame", timeout=5)
+        except (BrokenPipeError, EOFError, OSError) as exc:
+            raise CameraError(f"Capture process exited for {self.label}") from exc
+
+    def close(self) -> None:
+        if self.closed:
+            return
+        self.closed = True
+        try:
+            if self.process.is_alive():
+                try:
+                    self.connection.send("close")
+                except (BrokenPipeError, EOFError, OSError):
+                    pass
+                self.process.join(timeout=1)
+                if self.process.is_alive():
+                    self.process.terminate()
+                    self.process.join(timeout=1)
+                if self.process.is_alive():
+                    self.process.kill()
+                    self.process.join(timeout=1)
+        finally:
+            self.connection.close()
+
+
 @dataclass
 class SnapshotSource:
     url: str
@@ -87,7 +178,7 @@ class SnapshotSource:
     def read(self):
         import numpy as np
 
-        request = Request(self.url, headers={"User-Agent": "framewire/0.1"})
+        request = Request(self.url, headers={"User-Agent": "framewire/0.2"})
         try:
             with urlopen(request, timeout=5) as response:
                 content_type = response.headers.get("Content-Type", "").split(";")[0].lower()
@@ -159,13 +250,13 @@ def open_source(spec: str, *, snapshot: bool = False) -> FrameSource:
             raise CameraError("--snapshot requires an http:// or https:// image URL")
         return SnapshotSource(spec, safe_label(spec))
     if spec == "picamera":
-        return PiCameraSource()
+        return IsolatedSource("picamera")
     if spec == "auto":
         errors: list[str] = []
         for index in range(3):
             source = None
             try:
-                source = OpenCVSource.open(index)
+                source = IsolatedSource(index)
                 source.read()
                 return source
             except Exception as exc:
@@ -178,7 +269,7 @@ def open_source(spec: str, *, snapshot: bool = False) -> FrameSource:
         if sys.platform.startswith("linux"):
             source = None
             try:
-                source = PiCameraSource()
+                source = IsolatedSource("picamera")
                 source.read()
                 return source
             except Exception as exc:
@@ -190,7 +281,7 @@ def open_source(spec: str, *, snapshot: bool = False) -> FrameSource:
                         errors.append(f"picamera cleanup ({type(close_exc).__name__})")
         raise CameraError("No camera ready. Tried " + ", ".join(errors))
     if spec.isdecimal():
-        return OpenCVSource.open(int(spec))
+        return IsolatedSource(int(spec))
     if spec.startswith(("rtsp://", "rtsps://", "http://", "https://")):
-        return OpenCVSource.open(spec)
+        return IsolatedSource(spec)
     raise CameraError("Source must be auto, a camera number, picamera, or an RTSP/HTTP URL")
