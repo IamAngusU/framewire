@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import threading
 import time
 from collections.abc import Callable
@@ -22,6 +23,14 @@ class RunOptions:
     fps: float = 12
     lost_after: float = 0.8
     max_frames: int | None = None
+
+    def __post_init__(self) -> None:
+        if not math.isfinite(self.fps) or not 0 < self.fps <= 60:
+            raise ValueError("fps must be finite, above 0 and at most 60")
+        if not math.isfinite(self.lost_after) or not 0 < self.lost_after <= 60:
+            raise ValueError("lost_after must be finite, above 0 and at most 60")
+        if self.max_frames is not None and self.max_frames < 1:
+            raise ValueError("max_frames must be positive")
 
 
 class TargetState:
@@ -86,6 +95,7 @@ def run(
     adapters: AdapterManager | None = None,
     stop: threading.Event | None = None,
     status: Callable[[str], None] | None = None,
+    on_frame: Callable[[], None] | None = None,
 ) -> None:
     stop = stop or threading.Event()
     status = status or (lambda message: None)
@@ -119,6 +129,8 @@ def run(
                         control.update(target)
                     else:
                         control.release()
+                    if on_frame is not None:
+                        on_frame()
                     frames += 1
                     if options.max_frames is not None and frames >= options.max_frames:
                         return
@@ -155,7 +167,11 @@ def run(
                 except BrokenPipeError:
                     pass
         finally:
-            control.close()
-            if adapters is not None:
-                adapters.close()
-            bus.close()
+            try:
+                control.close()
+            finally:
+                try:
+                    if adapters is not None:
+                        adapters.close()
+                finally:
+                    bus.close()

@@ -15,41 +15,41 @@ Getting from “I have a camera” to “move this lamp when I move” often mea
 
 ## Start in a minute
 
-Python 3.10+ is required. Install from this repo:
+Paste one command. The installer prepares **uv, Python 3.12 and an isolated Framewire environment** for you. It needs internet, and runs without Git, sudo or an existing Python installation.
 
 <details open><summary><strong>macOS / Linux</strong></summary>
 
 ```sh
-git clone https://github.com/IamAngusU/framewire.git
-cd framewire
-python3 -m venv .venv
-. .venv/bin/activate
-python -m pip install -e .
-framewire doctor
-framewire run
+curl -fsSL https://raw.githubusercontent.com/IamAngusU/framewire/main/install.sh | sh
 ```
 
 </details>
+
+Open a new terminal after installation so the `framewire` command is on your PATH. The installer also prints its full path for immediate use.
 
 <details><summary><strong>Windows PowerShell</strong></summary>
 
 ```powershell
-git clone https://github.com/IamAngusU/framewire.git
-cd framewire
-py -3 -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install -e .
-framewire doctor
-framewire run
+irm https://raw.githubusercontent.com/IamAngusU/framewire/main/install.ps1 | iex
 ```
 
 </details>
 
-No camera handy? Run `framewire demo`. It sends the same event shape with a moving synthetic point and touches no hardware.
+Then try:
 
-<p align="center"><img src="docs/assets/terminal.svg" width="860" alt="Example terminal showing the doctor, run and JSON event output"></p>
+```sh
+framewire demo                 # a live terminal panel, without hardware
+framewire doctor               # find a camera and check your setup
+framewire run                  # follow a face
+```
 
-`framewire run` writes **JSONL to stdout** and human status to stderr. Stop with Ctrl+C. With no output flags or installed adapters, it only observes and emits events, so you can inspect the stream before connecting any hardware.
+Re-run the same installer to update or repair Framewire. It checks the released wheel's SHA-256, installs into a private environment and keeps your edited adapters and recorded samples. Optional recognition packages are added only when you ask for them. [Installer source](install.sh) · [Windows installer](install.ps1) · [Installation details](docs/install.md).
+
+USB webcams on a 64-bit Raspberry Pi use the same installer. A CSI camera needs Raspberry Pi OS's libcamera/Picamera2 packages and the [Pi setup](#raspberry-pi-setup).
+
+<p align="center"><img src="docs/assets/terminal.svg" width="860" alt="Framewire's actual terminal panel shown with simulated demo events"></p>
+
+In an interactive terminal, `run` and `demo` show a compact live panel: camera state, target coordinates, active adapters, outputs and recent activity. **Piping stdout automatically switches to JSONL.** Use `--json` to force JSONL or `--plain` for simple status lines. Human status stays on stderr; `NO_COLOR=1` disables color. Stop with Ctrl+C. With no output flags or installed adapters, Framewire only observes and emits events.
 
 ```json
 {"schema":"framewire.event.v1","time":"2026-10-14T10:00:00+00:00","sequence":2,"type":"target.acquired","source":"camera:0","target":{"x":0.63,"y":0.48,"size":0.05,"kind":"face"}}
@@ -76,13 +76,12 @@ The default detector follows the **largest frontal face** if several faces are v
 
 Adapters are ordinary Python files in the folder printed by `framewire adapters path`. On Windows it is under `%APPDATA%\Framewire\adapters`; on macOS and Linux it uses the usual application-config location. `FRAMEWIRE_HOME` can point elsewhere. **Enabled adapters run automatically with `framewire run`.** Use `--adapter NAME` to select one or `--no-adapters` to temporarily ignore all of them.
 
-The [copyable examples](src/framewire/examples/adapters) live separately from the core. `framewire adapters add NAME` copies one into *your* adapter folder; edit that copy freely. `framewire adapters new NAME` writes a three-method template for your own frame detector or event action. [Adapter guide](docs/adapters.md) · [Event contract](docs/events.md).
+The [copyable examples](src/framewire/examples/adapters) live separately from the core. `framewire setup NAME` prepares its optional packages, copies it into *your* adapter folder and caches its model; edit that copy freely. `framewire adapters add NAME` does the same. Add `--no-install --no-download` to only copy a file. Repeating setup keeps your edited copy. `framewire adapters new NAME` writes a template for your own detector or action. [Adapter guide](docs/adapters.md) · [Event contract](docs/events.md).
 
 ### Recognize two hands and gestures
 
 ```sh
-python -m pip install -e '.[hands]'
-framewire adapters add hands
+framewire setup hands actions
 framewire gestures record lamp.on
 framewire gestures list
 framewire run --track none
@@ -97,8 +96,7 @@ The hands adapter emits `hand.position` for each detected hand and `hand.gesture
 ### Speak a command in your language
 
 ```sh
-python -m pip install -e '.[voice]'
-framewire adapters add voice
+framewire setup voice actions
 framewire phrases add "licht an" lamp.on
 framewire phrases language de
 framewire phrases list
@@ -110,8 +108,7 @@ Use `framewire phrases add "phrase" ACTION`, `remove`, `list` and `language CODE
 ### Teach a short silent visual command
 
 ```sh
-python -m pip install -e '.[lips]'
-framewire adapters add lips
+framewire setup lips actions
 framewire lips record lamp.on --repeats 3
 framewire lips list
 framewire run --track none
@@ -139,7 +136,7 @@ sudo apt update
 sudo apt install python3-picamera2 python3-gpiozero python3-lgpio
 python3 -m venv --system-site-packages .venv
 . .venv/bin/activate
-python -m pip install -e '.[pi]'
+python -m pip install 'framewire[pi] @ https://github.com/IamAngusU/framewire/releases/download/v0.3.0/framewire-0.3.0-py3-none-any.whl'
 framewire doctor --source picamera
 ```
 
@@ -191,10 +188,14 @@ The example prints actions for `target.acquired`, `target.moved` and `target.los
 | No face for a moment | Holds the current target for `--lost-after` seconds; then emits `target.lost` and releases outputs. | Increase `--lost-after` for brief occlusion. |
 | Webhook is down | Warns on stderr and drops undeliverable webhook events; JSONL stdout still carries them. | Reconnect receiver; use a durable consumer if every event matters. |
 | GPIO library or pin fails | Reports the output error. A failing output is disabled so camera/events continue. | Check permissions, pin conflict and Pi packages. |
-| Adapter import, model or runtime fails | Emits `adapter.error` and disables that adapter for the current run; other adapters and camera continue. | Check its optional packages, model download and copied source file. |
+| Adapter import, model or runtime fails | Emits `adapter.error` and disables that adapter for the current run; other adapters and camera continue. | Run `framewire setup NAME`; check its copied source file. |
+| A sample or phrase file is damaged | Shows a repair hint and preserves the file. | Restore a valid copy, or rename the file to begin again. |
+| Adapters emit events in a loop | Stops the recursive signal chain and reports the offending adapter. | Emit signals only for a specific incoming event or state change. |
 | No microphone / microphone unplugged | Voice adapter emits `speech.error`, waits and retries; video tracking continues. | Select an input device in the OS and check audio permissions. |
 
 Camera capture runs in a separate process with bounded open/read waits (8/5 seconds). A stuck native driver can therefore be stopped and retried without freezing the event loop indefinitely, although OS cleanup and reconnection may take longer. JSONL is the complete local event stream while the process runs; it is not persisted automatically.
+
+Ordinary CLI errors are shown with a next step; add `framewire --debug COMMAND` for a traceback. Native camera messages are kept in Framewire's local `data/camera.log`; set `FRAMEWIRE_CAMERA_LOGS=1` to display them. [What has been tested, and the remaining limits](docs/reliability.md).
 
 ## Interfaces and scope
 
@@ -213,6 +214,10 @@ The built-in hardware path controls one pan axis and one digital output. Adapter
 ## Develop and verify
 
 ```sh
+git clone https://github.com/IamAngusU/framewire.git
+cd framewire
+python -m venv .venv
+# activate .venv for your shell
 python -m pip install -e '.[dev]'
 pytest -q
 ruff check src tests examples
@@ -221,4 +226,4 @@ ruff format --check src tests examples
 
 Tests cover target transitions, camera loss and recovery, output release, credential redaction, adapter isolation, phrase, hand-pose and visual-command matching, and a real local HTTP snapshot. Hardware and recognition behavior must also be checked on the exact camera, microphone, Pi and actuator you use. See [hardware notes](docs/hardware.md).
 
-MIT licensed. Early 0.2 release; event schema is versioned so integrations can reject an incompatible future format. [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md).
+MIT licensed. Early 0.3 release; event schema is versioned so integrations can reject an incompatible future format. [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md).

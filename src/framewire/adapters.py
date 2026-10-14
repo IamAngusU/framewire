@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import sys
+import threading
 from collections.abc import Callable
 from dataclasses import dataclass
 from importlib import resources
@@ -140,6 +141,7 @@ class AdapterManager:
         self.warn = warn or (lambda message: None)
         self.loaded: dict[str, LoadedAdapter] = {}
         self.closed = False
+        self._lock = threading.RLock()
         bus.subscribe(self.on_event)
 
     def _publish(self, name: str, signal: str, data: dict) -> None:
@@ -147,14 +149,19 @@ class AdapterManager:
             self.bus.emit("adapter.signal", f"adapter:{name}", data=data)
 
     def start(self) -> None:
+        with self._lock:
+            self._start()
+
+    def _start(self) -> None:
         for name, enabled in list_installed(self.folder):
             if not enabled or (self.selected is not None and name not in self.selected):
                 continue
             path = self.folder / f"{name}.py"
             try:
+                self.bus.emit("adapter.loading", f"adapter:{name}", data={"adapter": name})
                 settings_path = self.folder / f"{name}.toml"
                 settings = (
-                    tomllib.loads(settings_path.read_text(encoding="utf-8"))
+                    tomllib.loads(settings_path.read_text(encoding="utf-8-sig"))
                     if settings_path.exists()
                     else {}
                 )
@@ -190,32 +197,33 @@ class AdapterManager:
         )
 
     def on_frame(self, frame, now: float) -> None:
-        for name, item in tuple(self.loaded.items()):
-            if not hasattr(item.instance, "on_frame"):
-                continue
-            try:
-                item.instance.on_frame(frame, now)
-            except Exception as exc:
-                self._fail(name, exc)
+        self._deliver("on_frame", frame, now)
 
     def on_event(self, event: dict) -> None:
-        if self.closed:
-            return
-        for name, item in tuple(self.loaded.items()):
-            if not hasattr(item.instance, "on_event"):
-                continue
-            try:
-                item.instance.on_event(event)
-            except Exception as exc:
-                self._fail(name, exc)
+        self._deliver("on_event", event)
+
+    def _deliver(self, method: str, *args) -> None:
+        with self._lock:
+            if self.closed:
+                return
+            for name, item in tuple(self.loaded.items()):
+                if name not in self.loaded or not hasattr(item.instance, method):
+                    continue
+                try:
+                    getattr(item.instance, method)(*args)
+                except Exception as exc:
+                    self._fail(name, exc)
 
     def close(self) -> None:
-        self.closed = True
-        for name, item in tuple(self.loaded.items()):
-            item.context._alive = False
+        with self._lock:
+            self.closed = True
+            items = tuple(self.loaded.items())
+            self.loaded.clear()
+            for _, item in items:
+                item.context._alive = False
+        for name, item in items:
             try:
                 if hasattr(item.instance, "close"):
                     item.instance.close()
             except Exception as exc:
                 self.warn(f"Adapter {name} cleanup failed: {type(exc).__name__}")
-        self.loaded.clear()

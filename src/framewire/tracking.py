@@ -2,19 +2,21 @@
 
 from __future__ import annotations
 
-import cv2
-
 from .model import Target
 
 
 class FaceTracker:
     def __init__(self) -> None:
+        import cv2
+
+        self.cv2 = cv2
         path = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
         self.cascade = cv2.CascadeClassifier(path)
         if self.cascade.empty():
             raise RuntimeError("OpenCV's bundled face classifier is unavailable")
 
     def detect(self, frame) -> Target | None:
+        cv2 = self.cv2
         height, width = frame.shape[:2]
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         gray = cv2.equalizeHist(gray)
@@ -34,12 +36,16 @@ class FaceTracker:
 
 class MotionTracker:
     def __init__(self) -> None:
+        import cv2
+
+        self.cv2 = cv2
         self.background = cv2.createBackgroundSubtractorMOG2(
             history=100, varThreshold=32, detectShadows=True
         )
         self.frames = 0
 
     def detect(self, frame) -> Target | None:
+        cv2 = self.cv2
         self.frames += 1
         height, width = frame.shape[:2]
         mask = self.background.apply(frame)

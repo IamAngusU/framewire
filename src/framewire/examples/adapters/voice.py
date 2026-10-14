@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import queue
 import threading
+from collections import deque
 
 from framewire.commands import match_command, normalize_phrase
 from framewire.phrases import load_preferences
@@ -12,6 +13,7 @@ from framewire.phrases import load_preferences
 def create(context):
     class Voice:
         def start(self):
+            self.min_rms = context.number("min_rms", 0.018, minimum=0.0001, maximum=1)
             try:
                 import sounddevice as sd
                 from faster_whisper import WhisperModel
@@ -28,7 +30,6 @@ def create(context):
                         del self.commands[existing]
                 self.commands[phrase] = action
             self.language = preferences["language"] or context.settings.get("language", "auto")
-            self.min_rms = float(context.settings.get("min_rms", 0.018))
             model_name = context.settings.get("model", "tiny")
             model_dir = context.data_dir / "models"
             model_dir.mkdir(parents=True, exist_ok=True)
@@ -72,17 +73,21 @@ def create(context):
                         speaking = False
                         samples = []
                         silence = 0
+                        preroll = deque(maxlen=3)
                         while not self.stop.is_set():
                             try:
                                 block = self.blocks.get(timeout=0.2)
                             except queue.Empty:
+                                if not stream.active:
+                                    raise RuntimeError("microphone stream stopped")
                                 continue
                             loud = float(np.sqrt(np.mean(block * block))) >= self.min_rms
                             if loud and not speaking:
                                 speaking = True
-                                samples = []
+                                samples = list(preroll)
                                 silence = 0
                             if not speaking:
+                                preroll.append(block)
                                 continue
                             samples.append(block)
                             silence = 0 if loud else silence + 1

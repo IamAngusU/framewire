@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import json
 import re
 from pathlib import Path
 
 from .adapter_api import home_dir
 from .commands import normalize_phrase
+from .data import read_document, valid_label, write_document
 
 
 def preferences_path() -> Path:
@@ -16,29 +16,32 @@ def preferences_path() -> Path:
 
 def load_preferences(path: Path | None = None) -> dict:
     path = path or preferences_path()
-    if not path.exists():
+    data = read_document(path, "framewire.phrases.v1")
+    if data is None:
         return {"language": None, "commands": {}}
-    data = json.loads(path.read_text(encoding="utf-8"))
-    if data.get("schema") != "framewire.phrases.v1" or not isinstance(data.get("commands"), dict):
-        raise ValueError("phrase file has an unsupported schema")
+    if not isinstance(data.get("commands"), dict) or any(
+        not isinstance(phrase, str) or not normalize_phrase(phrase) or not valid_label(action)
+        for phrase, action in data["commands"].items()
+    ):
+        raise ValueError(f"Invalid phrase mappings in {path}. Restore a valid copy or rename it.")
+    language = data.get("language")
+    if language is not None and (
+        not isinstance(language, str)
+        or (language != "auto" and not re.fullmatch(r"[a-z]{2,3}", language))
+    ):
+        raise ValueError(f"Invalid language in {path}. Use auto or a language code such as de.")
     return {"language": data.get("language"), "commands": data["commands"]}
 
 
 def save_preferences(data: dict, path: Path | None = None) -> None:
     path = path or preferences_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temp = path.with_suffix(".tmp")
-    temp.write_text(
-        json.dumps({"schema": "framewire.phrases.v1", **data}, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
-    temp.replace(path)
+    write_document(path, {"schema": "framewire.phrases.v1", **data})
 
 
 def add_phrase(phrase: str, action: str) -> None:
     if not normalize_phrase(phrase) or len(phrase) > 120:
         raise ValueError("phrase must contain words and at most 120 characters")
-    if not action or len(action) > 80:
+    if not valid_label(action):
         raise ValueError("action must contain 1–80 characters")
     data = load_preferences()
     normalized = normalize_phrase(phrase)

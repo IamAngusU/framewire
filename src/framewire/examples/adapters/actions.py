@@ -7,6 +7,18 @@ import sys
 
 def create(context):
     class Actions:
+        def start(self):
+            rules = context.settings.get("rules", [])
+            if not isinstance(rules, list) or any(
+                not isinstance(rule, dict)
+                or any(
+                    not isinstance(rule.get(key), str) or not rule[key]
+                    for key in ("signal", "value", "action")
+                )
+                for rule in rules
+            ):
+                raise ValueError("actions.toml: each rule needs a signal, value and action string")
+
         def on_event(self, event):
             if event["type"] != "adapter.signal":
                 return

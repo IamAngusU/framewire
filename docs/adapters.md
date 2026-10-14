@@ -1,12 +1,9 @@
 # Adapters: a file you can understand and replace
 
-Run `framewire adapters path` to locate the active folder. Drop a `name.py` file there, then start `framewire run`. Enabled files load automatically. The four [shipped examples](../src/framewire/examples/adapters) are **copies**, not hidden built-ins:
+Run `framewire adapters path` to locate the active folder. Drop a `name.py` file there, then start `framewire run`. Enabled files load automatically. The four [shipped examples](../src/framewire/examples/adapters) are **copies** of ordinary adapter code. Setup prepares optional packages and models and keeps your existing files:
 
 ```sh
-framewire adapters add hands
-framewire adapters add voice
-framewire adapters add lips
-framewire adapters add actions
+framewire setup hands voice lips actions
 framewire adapters list
 ```
 
@@ -34,9 +31,18 @@ def create(context):
     return MyAdapter()
 ```
 
-All four methods are optional except `create`. `context.name` is the file's name, `context.settings` is its sibling TOML file parsed into a dict, and `context.data_dir` is a persistent per-adapter directory for models or calibration. `context.emit(signal, value, **metadata)` accepts JSON-safe values and can be called from a background thread. Events use `framewire.event.v1` with `type = "adapter.signal"`, `source = "adapter:NAME"`, and a `data` object containing `adapter`, `signal`, `value` and any metadata.
+All four methods are optional except `create`. `context.name` is the file's name, `context.settings` is its sibling TOML file parsed into a dict, and `context.data_dir` is a persistent per-adapter directory for models or calibration. `context.emit(signal, value, **metadata)` accepts JSON-safe values and can be called from a background thread. It rejects non-finite numbers and attempts to overwrite reserved fields. `context.number("threshold", 0.2, minimum=0.01, maximum=1)` reads and validates a numeric setting. Events use `framewire.event.v1` with `type = "adapter.signal"`, `source = "adapter:NAME"`, and a `data` object containing `adapter`, `signal`, `value` and any metadata.
 
-The loader catches import, setup, frame-processing and event-handler failures. It emits `adapter.error`, closes that adapter and leaves the others running. **An adapter is local Python code with your user's permissions.** Install only code you trust. Slow or blocking `on_frame` or `on_event` methods still slow the camera loop; put heavier inference or I/O in a worker thread and use a bounded queue. The [voice example](../src/framewire/examples/adapters/voice.py) shows one approach.
+The loader catches import, setup, frame-processing and event-handler failures. It emits `adapter.error`, closes that adapter and leaves the others running. Hooks are serialized across camera and audio event threads. Recursive signal chains are bounded. **An adapter is local Python code with your user's permissions.** Install only code you trust. Slow or blocking `on_frame` or `on_event` methods still slow the camera loop; put heavier inference or I/O in a worker thread and use a bounded queue. The [voice example](../src/framewire/examples/adapters/voice.py) shows one approach.
+
+If your adapter needs an actuator SDK, put its package requirements in the sibling TOML file:
+
+```toml
+# my_lamp.toml
+requirements = ["gpiozero>=2,<3"]
+```
+
+Then run `framewire setup my_lamp`. Framewire installs those requirements into its environment and remembers them for installer updates. The declaration is optional; adapters using only the standard library need no config file. Prebuilt packages are required by automatic setup. Package-manager failures keep your code and provide a local diagnostic log.
 
 ## Included examples
 

@@ -15,5 +15,5 @@
   <text x="190" y="88" fill="#F1F8F7" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="54" font-weight="750" letter-spacing="-2">framewire</text>
   <text x="193" y="120" fill="#A8C1C8" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="16" letter-spacing="2.4">CAMERA IN  /  CONTROL EVENTS OUT</text>
   <rect x="688" y="31" width="45" height="24" rx="12" fill="#203E47" stroke="#4C817F"/>
-  <text x="710" y="48" text-anchor="middle" fill="#8EECDA" font-family="monospace" font-size="11">0.2</text>
+  <text x="710" y="48" text-anchor="middle" fill="#8EECDA" font-family="monospace" font-size="11">0.3</text>
 </svg>

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "framewire"
-version = "0.2.0"
+version = "0.3.0"
 description = "Camera in. Control events out. A resilient, headless bridge for small physical projects."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -34,7 +34,7 @@ perception = ["mediapipe>=1.0,<2", "faster-whisper>=1.2,<2", "sounddevice>=0.5,<
 dev = ["pytest>=8,<10", "ruff>=0.8,<1"]
 
 [project.scripts]
-framewire = "framewire.cli:main"
+framewire = "framewire.entry:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

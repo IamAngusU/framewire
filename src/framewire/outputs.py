@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import json
 import queue
 import sys
@@ -9,6 +10,7 @@ import threading
 from collections.abc import Callable
 from urllib.request import Request, urlopen
 
+from . import __version__
 from .model import Event, Target
 from .sources import safe_label
 
@@ -28,6 +30,8 @@ class EventBus:
         self.warn = warn or (lambda message: None)
         self.sequence = 0
         self._lock = threading.RLock()
+        self._dispatch = threading.local()
+        self._stop = threading.Event()
         self.listeners: list[Callable[[dict], None]] = []
         self.pending: queue.Queue[dict | None] = queue.Queue(maxsize=64)
         self.worker: threading.Thread | None = None
@@ -46,11 +50,16 @@ class EventBus:
         detail: str | None = None,
         data: dict | None = None,
     ) -> Event:
+        depth = getattr(self._dispatch, "depth", 0)
+        if depth >= 16 and kind != "adapter.error":
+            raise RuntimeError(
+                "Adapter signals formed a cycle; limit signals emitted from on_event"
+            )
         with self._lock:
             self.sequence += 1
             event = Event(self.sequence, kind, source, target, detail, data)
             payload = event.to_dict()
-            self.stream.write(json.dumps(payload, separators=(",", ":")) + "\n")
+            self.stream.write(json.dumps(payload, separators=(",", ":"), allow_nan=False) + "\n")
             self.stream.flush()
             if self.webhook:
                 try:
@@ -68,32 +77,54 @@ class EventBus:
                             "Webhook is falling behind; some events were dropped (stdout remains complete)."
                         )
                         self._queue_warned = True
-            for listener in tuple(self.listeners):
-                listener(payload)
+            listeners = tuple(self.listeners)
+        # Hooks run outside the output lock so audio and frame workers cannot deadlock.
+        self._dispatch.depth = depth + 1
+        try:
+            for listener in listeners:
+                try:
+                    listener(copy.deepcopy(payload))
+                except BrokenPipeError:
+                    raise
+                except Exception as exc:
+                    with self._lock:
+                        if listener in self.listeners:
+                            self.listeners.remove(listener)
+                    self.warn(f"Event listener disabled after {type(exc).__name__}")
+        finally:
+            self._dispatch.depth = depth
         return event
 
     def subscribe(self, listener: Callable[[dict], None]) -> None:
-        self.listeners.append(listener)
+        with self._lock:
+            self.listeners.append(listener)
 
     def _send_loop(self) -> None:
         assert self.webhook is not None
-        while True:
-            payload = self.pending.get()
+        while not self._stop.is_set():
+            try:
+                payload = self.pending.get(timeout=0.2)
+            except queue.Empty:
+                continue
             if payload is None:
                 return
-            headers = {"Content-Type": "application/json", "User-Agent": "framewire/0.2"}
+            headers = {"Content-Type": "application/json", "User-Agent": f"framewire/{__version__}"}
             if self.token:
                 headers["Authorization"] = f"Bearer {self.token}"
-            request = Request(
-                self.webhook, data=json.dumps(payload).encode(), headers=headers, method="POST"
-            )
             try:
+                request = Request(
+                    self.webhook,
+                    data=json.dumps(payload, allow_nan=False).encode(),
+                    headers=headers,
+                    method="POST",
+                )
                 with urlopen(request, timeout=3) as response:
                     response.read(1024)
             except Exception as exc:
                 self.warn(f"Webhook {safe_label(self.webhook)} failed: {type(exc).__name__}")
 
     def close(self) -> None:
+        self._stop.set()
         if self.worker:
             try:
                 self.pending.put_nowait(None)

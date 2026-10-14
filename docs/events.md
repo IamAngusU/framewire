@@ -1,6 +1,6 @@
 # Event contract
 
-Framewire emits one compact JSON object per stdout line. Diagnostic text goes to stderr. A configured webhook receives the same object as an HTTP POST with `Content-Type: application/json`. Each process starts `sequence` at 1 and increments it for every emitted event.
+When stdout is piped, or `--json` is set, Framewire emits one compact JSON object per stdout line. In an interactive terminal it shows a live panel instead. Diagnostic text and the panel go to stderr. A configured webhook receives events as HTTP POSTs with `Content-Type: application/json`. Each process starts `sequence` at 1 and increments it for every emitted event.
 
 ```json
 {
@@ -38,6 +38,7 @@ source.lost
 - `target.moved`: the smoothed target changed by at least 0.025 of frame width or height; emission is limited to at most once per 0.2 seconds. The servo may update between emitted movement events.
 - `target.lost`: no detection for the grace period, or the camera failed. GPIO goes LOW and servo PWM is released.
 - `source.lost`: open/read/detection failed. The process waits and retries. It may be the first event if no source was ready.
+- `adapter.loading`: an installed adapter is preparing its config, model or device.
 - `adapter.ready`: an installed adapter loaded successfully.
 - `adapter.error`: an adapter failed and was disabled for this process run. `data.error` is the exception class; `data.message` is diagnostic text.
 - `adapter.signal`: an adapter emitted a signal. `data.adapter`, `data.signal` and `data.value` are always present; adapter-specific JSON fields follow. Example signals include `hand.position`, `hand.gesture`, `speech.transcript`, `speech.command`, `lip.command` and `action.triggered`.

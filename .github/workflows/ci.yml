@@ -25,3 +25,36 @@ jobs:
       - run: python -m framewire demo --seconds 0.1
       - run: ruff check src tests examples
       - run: ruff format --check src tests examples
+
+  install:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - run: python -m pip wheel . --no-deps --wheel-dir dist
+      - name: Unix installer
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          export FRAMEWIRE_HOME="$RUNNER_TEMP/framewire-home"
+          export FRAMEWIRE_BIN_DIR="$RUNNER_TEMP/framewire-bin"
+          export FRAMEWIRE_PACKAGE="$PWD/dist/framewire-0.3.0-py3-none-any.whl"
+          export FRAMEWIRE_NO_PATH=1
+          sh install.sh
+          "$FRAMEWIRE_BIN_DIR/framewire" demo --seconds 0.1 --json
+      - name: Windows installer
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $env:FRAMEWIRE_HOME = Join-Path $env:RUNNER_TEMP 'framewire-home'
+          $env:FRAMEWIRE_BIN_DIR = Join-Path $env:RUNNER_TEMP 'framewire-bin'
+          $env:FRAMEWIRE_PACKAGE = (Resolve-Path 'dist/framewire-0.3.0-py3-none-any.whl').Path
+          $env:FRAMEWIRE_NO_PATH = '1'
+          & ./install.ps1
+          & (Join-Path $env:FRAMEWIRE_BIN_DIR 'framewire.exe') demo --seconds 0.1 --json

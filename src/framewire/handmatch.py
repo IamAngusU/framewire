@@ -2,13 +2,11 @@
 
 from __future__ import annotations
 
-import json
 import math
 from pathlib import Path
 
-import cv2
-
 from .adapter_api import ensure_model
+from .data import read_document, valid_label, valid_vector, write_document
 
 MODEL_URL = (
     "https://storage.googleapis.com/mediapipe-models/gesture_recognizer/"
@@ -64,24 +62,22 @@ def best_pose(
 
 
 def load_samples(path: Path) -> dict[str, list[list[float]]]:
-    if not path.exists():
+    data = read_document(path, "framewire.hands.v1")
+    if data is None:
         return {}
-    data = json.loads(path.read_text(encoding="utf-8"))
-    if data.get("schema") != "framewire.hands.v1" or not isinstance(data.get("samples"), dict):
-        raise ValueError("hand sample file has an unsupported schema")
-    return data["samples"]
+    samples = data.get("samples")
+    if not isinstance(samples, dict) or any(
+        not valid_label(label)
+        or not isinstance(examples, list)
+        or any(not valid_vector(sample, 42) for sample in examples)
+        for label, examples in samples.items()
+    ):
+        raise ValueError(f"Invalid hand samples in {path}. Restore a valid copy or rename it.")
+    return samples
 
 
 def save_samples(path: Path, samples: dict[str, list[list[float]]]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temp = path.with_suffix(".tmp")
-    temp.write_text(
-        json.dumps(
-            {"schema": "framewire.hands.v1", "samples": samples}, ensure_ascii=False, indent=2
-        ),
-        encoding="utf-8",
-    )
-    temp.replace(path)
+    write_document(path, {"schema": "framewire.hands.v1", "samples": samples})
 
 
 class HandFeatures:
@@ -101,6 +97,8 @@ class HandFeatures:
         self.last_ms = 0
 
     def read(self, frame, now: float):
+        import cv2
+
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         image = self.mp.Image(image_format=self.mp.ImageFormat.SRGB, data=rgb)
         timestamp = max(self.last_ms + 1, int(now * 1000))

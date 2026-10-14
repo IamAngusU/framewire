@@ -7,6 +7,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from .adapter_api import home_dir
+from .data import valid_label
 from .lipmatch import MouthFeatures, load_samples, save_samples, variation
 from .sources import open_source
 
@@ -23,7 +24,7 @@ def record(
     repeats: int = 3,
     status: Callable[[str], None] = print,
 ) -> int:
-    if not label or len(label) > 80:
+    if not valid_label(label):
         raise ValueError("label must contain 1–80 characters")
     if not 0.8 <= seconds <= 5 or not 1 <= repeats <= 10:
         raise ValueError("seconds must be 0.8–5 and repeats 1–10")

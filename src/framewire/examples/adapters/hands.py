@@ -8,10 +8,10 @@ from framewire.handmatch import HandFeatures, best_pose, load_samples, pose_feat
 def create(context):
     class Hands:
         def start(self):
+            self.threshold = context.number("threshold", 0.22, minimum=0.01, maximum=2)
+            self.margin = context.number("margin", 0.05, minimum=0, maximum=2)
             self.features = HandFeatures(context.data_dir / "models")
             self.samples = load_samples(context.data_dir / "gestures.json")
-            self.threshold = float(context.settings.get("threshold", 0.22))
-            self.margin = float(context.settings.get("margin", 0.05))
             self.pending = {}
             self.active = {}
             self.seen = {}
